@@ -1,1 +1,9 @@
-
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+venv/
+.venv/
+*.zip
+vfs/
+.DS_Store
