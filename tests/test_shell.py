@@ -2,11 +2,14 @@
 
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from emulator import Shell, parse  # noqa: E402
+from emulator import (  # noqa: E402
+    Shell, parse, parse_args, read_script, strip_comment, vfs_name,
+)
 
 
 class TestParse(unittest.TestCase):
@@ -46,6 +49,47 @@ class TestShell(unittest.TestCase):
         """exit останавливает оболочку."""
         self.shell.execute("exit")
         self.assertFalse(self.shell.running)
+
+
+class TestConfig(unittest.TestCase):
+    """Проверка параметров командной строки и стартового скрипта."""
+
+    def test_args(self):
+        """Оба параметра разбираются."""
+        args = parse_args(["--vfs", "a.zip", "--script", "s.txt"])
+        self.assertEqual((args.vfs, args.script), ("a.zip", "s.txt"))
+
+    def test_no_args(self):
+        """Без параметров оба значения пустые."""
+        args = parse_args([])
+        self.assertIsNone(args.vfs)
+        self.assertIsNone(args.script)
+
+    def test_vfs_name(self):
+        """Имя VFS берётся из имени файла."""
+        self.assertEqual(vfs_name("vfs/deep.zip"), "deep")
+        self.assertEqual(vfs_name(None), "myvfs")
+
+    def test_strip_comment(self):
+        """Комментарий в конце строки удаляется."""
+        self.assertEqual(strip_comment("ls a  # тест"), "ls a")
+        self.assertEqual(strip_comment("# только комментарий"), "")
+
+    def test_read_script(self):
+        """Из скрипта остаются только команды."""
+        text = "# заголовок\nls a\n\ncd b # переход\n"
+        with tempfile.NamedTemporaryFile(
+                "w", suffix=".txt", delete=False, encoding="utf-8") as file:
+            file.write(text)
+        try:
+            self.assertEqual(read_script(file.name), ["ls a", "cd b"])
+        finally:
+            os.remove(file.name)
+
+    def test_missing_script(self):
+        """Несуществующий скрипт вызывает ошибку."""
+        with self.assertRaises(OSError):
+            read_script("нет_такого_файла.txt")
 
 
 if __name__ == "__main__":
