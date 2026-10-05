@@ -9,7 +9,9 @@ import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from vfs import VFS, VFSError, empty_zip, vfs_name  # noqa: E402
+from vfs import (  # noqa: E402
+    VFS, VFSError, decode_content, empty_zip, vfs_name,
+)
 
 
 def make_zip_file(files):
@@ -40,9 +42,10 @@ class TestVFS(unittest.TestCase):
     def test_load_tree(self):
         """Дерево каталогов строится в памяти."""
         vfs = VFS.load(self.path)
-        file_data = vfs.root["a"]["b"]["c"]["file.txt"]
+        file_data = decode_content(vfs.root["a"]["b"]["c"]["file.txt"])
         self.assertEqual(file_data.decode("utf-8"), "текст")
-        self.assertEqual(vfs.root["top.bin"], bytes([0, 1, 255]))
+        self.assertEqual(vfs.root["top.bin"], "AAH/")
+        self.assertEqual(decode_content("AAH/"), bytes([0, 1, 255]))
         self.assertEqual(vfs.root["empty"], {})
 
     def test_name_and_hash(self):

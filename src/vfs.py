@@ -1,9 +1,10 @@
 """Виртуальная файловая система (VFS), полностью хранящаяся в памяти.
 
 Источник данных VFS — ZIP-архив. Архив читается в память целиком
-и не распаковывается на диск.
+и не распаковывается на диск. Содержимое файлов хранится в base64.
 """
 
+import base64
 import hashlib
 import io
 import os
@@ -32,10 +33,21 @@ def empty_zip():
     return buffer.getvalue()
 
 
+def encode_content(data):
+    """Кодирует двоичное содержимое файла в строку base64."""
+    return base64.b64encode(data).decode("ascii")
+
+
+def decode_content(text):
+    """Декодирует содержимое файла из строки base64 в байты."""
+    return base64.b64decode(text)
+
+
 def add_entry(root, info, archive):
     """Добавляет в дерево каталогов один элемент ZIP-архива.
 
-    Каталог хранится как словарь {имя: узел}, файл — как байты.
+    Каталог хранится как словарь {имя: узел}, файл — как строка
+    с содержимым в кодировке base64.
     """
     parts = [part for part in info.filename.split("/") if part]
     if not parts:
@@ -48,7 +60,7 @@ def add_entry(root, info, archive):
     if info.is_dir():
         node.setdefault(parts[-1], {})
     else:
-        node[parts[-1]] = archive.read(info)
+        node[parts[-1]] = encode_content(archive.read(info))
 
 
 def build_tree(data):
