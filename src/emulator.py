@@ -1,10 +1,10 @@
 """Эмулятор командной оболочки UNIX с графическим интерфейсом."""
 
 import argparse
-import os
 import tkinter as tk
 
-DEFAULT_VFS_NAME = "myvfs"
+from vfs import VFS, VFSError
+
 PROMPT = "$ "
 COMMENT = "#"
 
@@ -44,24 +44,19 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def vfs_name(path):
-    """Возвращает имя VFS по пути: имя файла без расширения."""
-    if not path:
-        return DEFAULT_VFS_NAME
-    base = os.path.basename(os.path.normpath(path))
-    return os.path.splitext(base)[0]
-
-
 class Shell:
     """Логика оболочки: выполняет команды и возвращает их вывод."""
 
-    def __init__(self):
-        """Создаёт оболочку и таблицу поддерживаемых команд."""
+    def __init__(self, vfs=None):
+        """Создаёт оболочку с VFS и таблицей поддерживаемых команд."""
+        self.vfs = vfs or VFS()
         self.running = True
         self.commands = {
             "ls": self.cmd_stub,
             "cd": self.cmd_stub,
             "exit": self.cmd_exit,
+            "vfs-info": self.cmd_vfs_info,
+            "vfs-init": self.cmd_vfs_init,
         }
 
     def execute(self, line):
@@ -83,23 +78,43 @@ class Shell:
         self.running = False
         return ""
 
+    def cmd_vfs_info(self, name, args):
+        """Выводит имя VFS и SHA-256 хеш её данных."""
+        if args:
+            return f"{name}: команда не принимает аргументы"
+        return f"Имя VFS: {self.vfs.name}\nSHA-256: {self.vfs.sha256()}"
+
+    def cmd_vfs_init(self, name, args):
+        """Заменяет текущую VFS на пустую VFS по умолчанию."""
+        if args:
+            return f"{name}: команда не принимает аргументы"
+        try:
+            self.vfs.reset()
+        except VFSError as error:
+            return f"{name}: {error}"
+        return "VFS заменена на пустую VFS по умолчанию"
+
 
 class App:
     """Графическое окно эмулятора."""
 
     def __init__(self, root, shell, args):
-        """Создаёт окно и планирует запуск стартового скрипта."""
+        """Создаёт окно и планирует загрузку VFS и стартового скрипта."""
         self.root = root
         self.shell = shell
         self.args = args
-        root.title(f"Эмулятор — VFS: {vfs_name(args.vfs)}")
         self.output = tk.Text(root, height=20, width=80)
         self.output.pack(fill=tk.BOTH, expand=True)
         self.entry = tk.Entry(root)
         self.entry.pack(fill=tk.X)
         self.entry.bind("<Return>", self.on_enter)
         self.entry.focus()
+        self.update_title()
         root.after(0, self.start)
+
+    def update_title(self):
+        """Показывает имя текущей VFS в заголовке окна."""
+        self.root.title(f"Эмулятор — VFS: {self.shell.vfs.name}")
 
     def write(self, text):
         """Добавляет строку текста в поле вывода."""
@@ -107,12 +122,23 @@ class App:
         self.output.see(tk.END)
 
     def start(self):
-        """Выводит параметры запуска и выполняет стартовый скрипт."""
+        """Выводит параметры, загружает VFS и выполняет скрипт."""
         self.write("Параметры запуска:")
         self.write(f"  --vfs:    {self.args.vfs or 'не задан'}")
         self.write(f"  --script: {self.args.script or 'не задан'}")
+        if self.args.vfs:
+            self.load_vfs(self.args.vfs)
         if self.args.script:
             self.run_script(self.args.script)
+
+    def load_vfs(self, path):
+        """Загружает VFS из ZIP-архива, при ошибке оставляет пустую."""
+        try:
+            self.shell.vfs = VFS.load(path)
+        except VFSError as error:
+            self.write(f"Ошибка загрузки VFS: {error}")
+            self.write("Используется пустая VFS по умолчанию")
+        self.update_title()
 
     def run_script(self, path):
         """Выполняет команды стартового скрипта, показывая ввод и вывод."""

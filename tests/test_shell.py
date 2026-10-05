@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from emulator import (  # noqa: E402
-    Shell, parse, parse_args, read_script, strip_comment, vfs_name,
+    Shell, parse, parse_args, read_script, strip_comment,
 )
 
 
@@ -50,6 +50,17 @@ class TestShell(unittest.TestCase):
         self.shell.execute("exit")
         self.assertFalse(self.shell.running)
 
+    def test_vfs_info(self):
+        """vfs-info выводит имя и хеш VFS."""
+        result = self.shell.execute("vfs-info")
+        self.assertIn("Имя VFS: myvfs", result)
+        self.assertIn(self.shell.vfs.sha256(), result)
+
+    def test_vfs_commands_reject_args(self):
+        """Служебные команды не принимают аргументы."""
+        self.assertIn("не принимает", self.shell.execute("vfs-info x"))
+        self.assertIn("не принимает", self.shell.execute("vfs-init x"))
+
 
 class TestConfig(unittest.TestCase):
     """Проверка параметров командной строки и стартового скрипта."""
@@ -64,11 +75,6 @@ class TestConfig(unittest.TestCase):
         args = parse_args([])
         self.assertIsNone(args.vfs)
         self.assertIsNone(args.script)
-
-    def test_vfs_name(self):
-        """Имя VFS берётся из имени файла."""
-        self.assertEqual(vfs_name("vfs/deep.zip"), "deep")
-        self.assertEqual(vfs_name(None), "myvfs")
 
     def test_strip_comment(self):
         """Комментарий в конце строки удаляется."""

@@ -5,9 +5,11 @@
 
 ## Структура
 
-- `src/emulator.py` — исходный код эмулятора;
+- `src/emulator.py` — оболочка, параметры запуска, графический интерфейс;
+- `src/vfs.py` — виртуальная файловая система (VFS) в памяти;
 - `tests/` — модульные тесты;
-- `scripts/` — стартовые скрипты эмулятора и скрипты ОС для проверки;
+- `scripts/` — стартовые скрипты эмулятора, скрипты ОС для проверки
+  и `make_vfs.py`, который создаёт тестовые VFS;
 - `run.sh`, `run.bat` — скрипты запуска.
 
 ## Параметры командной строки
@@ -29,56 +31,89 @@
 При выполнении на экране показываются и команды, и их вывод.
 Если файл скрипта не удаётся прочитать, выводится ошибка.
 
+## VFS
+
+Источник VFS — ZIP-архив. Архив целиком читается в память,
+на диск ничего не распаковывается. Каталоги хранятся как словари
+`{имя: узел}`, файлы — как байты содержимого.
+Если архив не найден или не является ZIP, выводится ошибка
+и используется пустая VFS по умолчанию.
+
+Тестовые VFS не хранятся в репозитории (архивы запрещены),
+их создаёт скрипт `scripts/make_vfs.py` в папке `vfs/`:
+
+- `minimal.zip` — минимальная VFS из одного файла;
+- `files.zip` — несколько файлов, в том числе двоичный;
+- `deep.zip` — вложенность каталогов 4 уровня и пустой каталог.
+
 ## Функции
 
 - `parse(line)` — разбивает строку по пробелам на команду и аргументы;
 - `strip_comment(line)` — удаляет комментарий из строки;
 - `read_script(path)` — читает стартовый скрипт, возвращает список команд;
 - `parse_args(argv)` — разбирает параметры командной строки;
-- `vfs_name(path)` — возвращает имя VFS по пути;
 - `Shell.execute(line)` — выполняет команду и возвращает её вывод;
-- `App` — окно эмулятора: вывод параметров, стартовый скрипт, диалог.
+- `App` — окно эмулятора: параметры, загрузка VFS, скрипт, диалог;
+- `VFS.load(path)` — загружает VFS из ZIP-архива в память;
+- `VFS.sha256()` — SHA-256 хеш данных VFS;
+- `VFS.reset()` — замена на пустую VFS и очистка физического файла;
+- `vfs_name(path)` — имя VFS по пути.
 
 ## Команды
 
-| Команда | Описание |
-|---------|----------|
-| `ls`    | заглушка: выводит имя и аргументы |
-| `cd`    | заглушка: выводит имя и аргументы |
-| `exit`  | закрывает эмулятор |
+| Команда    | Описание |
+|------------|----------|
+| `ls`       | заглушка: выводит имя и аргументы |
+| `cd`       | заглушка: выводит имя и аргументы |
+| `exit`     | закрывает эмулятор |
+| `vfs-info` | выводит имя VFS и SHA-256 хеш её данных |
+| `vfs-init` | заменяет VFS на пустую по умолчанию и очищает её файл |
 
 Неизвестная команда выводит ошибку `<команда>: команда не найдена`.
+`vfs-info` и `vfs-init` не принимают аргументов.
 
 ## Запуск и тесты
 
 Требуется Python 3.
 
 ```
-./run.sh --vfs vfs/minimal.zip --script scripts/stage2.txt   # Linux/macOS
-run.bat --vfs vfs\minimal.zip --script scripts\stage2.txt    # Windows
+python3 scripts/make_vfs.py                                  # создать VFS
+./run.sh --vfs vfs/deep.zip --script scripts/stage3.txt      # Linux/macOS
+run.bat --vfs vfs\deep.zip --script scripts\stage3.txt       # Windows
 python3 -m unittest discover -s tests                        # тесты
 ```
 
-Скрипты ОС для проверки всех параметров:
+Скрипты ОС для проверки (каждый сам создаёт тестовые VFS):
 
 ```
-sh scripts/test_no_args.sh      # без параметров
-sh scripts/test_vfs.sh          # только --vfs
-sh scripts/test_script.sh       # только --script
-sh scripts/test_all.sh          # оба параметра
-sh scripts/test_bad_script.sh   # ошибка: скрипт не существует
+sh scripts/test_no_args.sh       # без параметров
+sh scripts/test_vfs.sh           # только --vfs
+sh scripts/test_script.sh        # только --script
+sh scripts/test_all.sh           # оба параметра
+sh scripts/test_bad_script.sh    # ошибка: скрипт не существует
+sh scripts/test_vfs_minimal.sh   # этап 3: минимальная VFS
+sh scripts/test_vfs_files.sh     # этап 3: несколько файлов
+sh scripts/test_vfs_deep.sh      # этап 3: вложенность 4 уровня
+sh scripts/test_bad_vfs.sh       # ошибка: VFS не существует
+sh scripts/test_not_zip.sh       # ошибка: VFS не является ZIP
 ```
 
 ## Пример использования
 
 ```
 Параметры запуска:
-  --vfs:    vfs/minimal.zip
-  --script: scripts/stage2.txt
-$ ls -l /home
-ls ['-l', '/home']
-$ cd docs
-cd ['docs']
+  --vfs:    vfs/deep.zip
+  --script: scripts/stage3.txt
+$ vfs-info
+Имя VFS: deep
+SHA-256: 9fc7aea502fecf8cf425e44158b0332b78a8ad0d3ca9067165bd7b944e4d8332
+$ vfs-info лишний
+vfs-info: команда не принимает аргументы
+$ vfs-init
+VFS заменена на пустую VFS по умолчанию
+$ vfs-info
+Имя VFS: deep
+SHA-256: 8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85
 $ hello world
 hello: команда не найдена
 ```
